@@ -32,11 +32,11 @@ export const Appbar = () => {
         signAndSend();
     }, [publicKey])
 
-    return <div className="flex justify-between border-b pb-2 pt-2">
+    return <div className="flex justify-between border-b pb-2 pt-2 bg-white">
         <div className="text-2xl pl-4 flex justify-center">
-            <img src="/assets/echo.png" alt="Echo Logo" className="h-8 w-auto" />
+            <img src="/verge.png" alt="Verge Logo" className="h-16 w-auto" />
         </div>
-        <div className="text-xl pr-4">
+        <div className="text-xl pr-4 pt-2">
             {publicKey ? <WalletDisconnectButton /> : <WalletMultiButton /> }
         </div>
     </div>
