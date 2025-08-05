@@ -8,10 +8,12 @@ import { createPresignedPost } from '@aws-sdk/s3-presigned-post'
 import { createTaskInput } from "../types";
 import nacl from "tweetnacl";
 import { Connection, PublicKey } from "@solana/web3.js";
+import { Client, SubmittableTransaction, Wallet} from "xrpl";
+// const connection = new Connection('https://solana-mainnet.g.alchemy.com/v2/3GHuEu4-cXEuE8jDAZW3EFgTedkyJ0K3');
+const client = new Client('wss://s.altnet.rippletest.net:51233');
+client.connect();
 
-const connection = new Connection('https://solana-mainnet.g.alchemy.com/v2/3GHuEu4-cXEuE8jDAZW3EFgTedkyJ0K3');
-
-const PARENT_WALLET_ADDRESS = "7W5nwpKWd4MfocNsXHNdUmhngziVRjL4fuyBHrJG4kZC"
+const wallet = Wallet.generate();
 const DEFAULT_TITLE = "Select the most engaging thumbnail/picture";
 
 const s3Client = new S3Client({
@@ -56,11 +58,15 @@ router.get("/task", authMiddleware, async (req, res) => {
         })
     }
 
-    const transaction = await connection.getTransaction(parseData.data.signature, {
-        maxSupportedTransactionVersion: 1
-    });
+    const transaction: SubmittableTransaction = {
+        TransactionType: 'Payment',
+        Account: wallet.classicAddress,
+        Destination: 'r9cZA1mLK5R5Am25ArfXFmqgNwjZgnfk59',
+        Amount: '10000000'
+    }
 
-    console.log(transaction);
+    const result = await client.submit(transaction, {wallet});
+    console.log(result);
 
     if ((transaction?.meta?.postBalances[1] ?? 0) - (transaction?.meta?.preBalances[1] ?? 0) !== 100000) {
         return res.status(411).json({
