@@ -18,6 +18,7 @@
 
 body {
   color: rgb(var(--foreground-rgb));
+  font-family: 'Futura';
   background: linear-gradient(
       to bottom,
       transparent,
@@ -35,7 +36,7 @@ body {
 .wallet-adapter-button {
   background-color: rgb(31, 41, 55) !important;
   color: white !important;
-  font-family: inherit !important;
+  font-family: 'Space Mono' !important;
   border-radius: 6px !important;
   padding: 8px 16px !important;
   transition: background-color 0.2s ease !important;

@@ -84,7 +84,7 @@ export const Upload = () => {
             <button onClick={async () => {
                 await makePayment();
                 await onSubmit()
-            }} type="button" className="ml-8 mt-6 text-white bg-gray-200 hover:bg-gray-900 focus:outline-none focus:ring-4 focus:ring-gray-300 font-medium rounded-full text-sm px-5 py-2.5 me-2 mb-2 dark:bg-gray-800 dark:however:bg-gray-700 dark:focus:ring-gray-700 dark:boder-gray-700">
+            }} type="button" className="submit-button ml-8 mt-6 text-white bg-gray-200 hover:bg-gray-900 focus:outline-none focus:ring-4 focus:ring-gray-300 font-medium rounded-full text-sm px-5 py-2.5 me-2 mb-2 dark:bg-gray-800 dark:however:bg-gray-700 dark:focus:ring-gray-700 dark:boder-gray-700">
                 Submit Task
             </button>
         </div>
