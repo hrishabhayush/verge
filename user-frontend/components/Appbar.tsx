@@ -43,7 +43,9 @@ export const Appbar = () => {
         <WagmiProvider config={config}>
             <QueryClientProvider client={queryClient}>
                 <RainbowKitProvider>
-                    <ConnectButton />
+                    <div className="text-l pt-2 pr-4">
+                        <ConnectButton />
+                    </div>
                 </RainbowKitProvider>
             </QueryClientProvider>
     </WagmiProvider>
