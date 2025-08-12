@@ -1,8 +1,10 @@
 "use client"
 import { Appbar } from '@/components/Appbar';
-import { BACKEND_URL } from '@/utils';
+// import { BACKEND_URL } from '@/utils';
 import axios from 'axios';
 import { useEffect, useState } from 'react';
+
+const BACKEND_URL = "http://localhost:3000";
 
 async function getTaskDetails(taskId: string) {
     const response = await axios.get(`${BACKEND_URL}/v1/user/task?taskId=${taskId}`, {
@@ -34,7 +36,7 @@ export default function Page({params: {
             })
     }, [taskId]);
 
-    return <div>
+    return <div className='min-h-screen bg-white text-black'>
         <Appbar />
         <div className='text-2xl pt-20 flex justify-center'>
             {taskDetails.title}
@@ -51,7 +53,7 @@ function Task({imageUrl, votes}: {
 }) {
     return <div>
         <img className={"p-2 w-96 rounded-md"} src={imageUrl} />
-        <div className='flex justify-center'>
+        <div className='bg-white text-black flex justify-center'>
             {votes}
         </div>
     </div>

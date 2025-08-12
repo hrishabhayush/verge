@@ -1,83 +1,51 @@
-'use client';
-import { merge } from 'lodash';
-import '@rainbow-me/rainbowkit/styles.css';
+"use client";
+import { ConnectButton } from '@rainbow-me/rainbowkit';
+import { useAccount, useSignMessage } from 'wagmi';
 import { useEffect } from 'react';
-import {
-    getDefaultConfig,
-    ConnectButton,
-    RainbowKitProvider,
-    darkTheme,
-    lightTheme,
-    Theme, 
-} from '@rainbow-me/rainbowkit';
-import { useWalletClient, WagmiProvider, useConnections } from 'wagmi';
-import { BACKEND_URL } from '@/utils';
-import {
-    mainnet,
-    polygon,
-    optimism,
-    arbitrum,
-    base,
-    xrplevmTestnet,
-} from 'wagmi/chains';
-
-import {
-    QueryClientProvider,
-    QueryClient,
-} from '@tanstack/react-query';
 import axios from 'axios';
+// import { BACKEND_URL } from '@/utils';
 
-const config = getDefaultConfig({
-    appName: 'Verge',
-    projectId: 'dd1ed69c86e875fbde469749a73030fd',
-    chains: [mainnet, polygon, optimism, arbitrum, base, xrplevmTestnet],
-    ssr: false,
-});
-
-const myTheme = merge(darkTheme(), {
-    colors: {
-        accentColor: 'black',
-    },
-    fonts: {
-        body: 'Futura',
-    }
-} as Theme);
-
-const queryClient = new QueryClient();
+const BACKEND_URL = "http://localhost:3000";
 
 export const Appbar = () => {
-//    const { data : walletClient } = useWalletClient();
+    const { address, isConnected } = useAccount();
+    const { signMessageAsync } = useSignMessage();
 
-//     async function handleConnect() {
-//         const response = await axios.post(`${BACKEND_URL}/v1/user/sign-in`, {
-//             publicKey: walletClient?.account.address,
-//         });
+    async function signAndSend() {
+        if (!address || !isConnected) {
+            return;
+        }
+        
+        try {
+            const message = "Sign into Verge for voting";
+            const signature = await signMessageAsync({ message });
+            
+            console.log(signature);
+            console.log(address);
+            console.log("[APPBAR] BACKEND_URL:", BACKEND_URL);
+            const response = await axios.post(`${BACKEND_URL}/v1/user/signin`, {
+                publicKey: address,
+                signature
+            });
 
-//         localStorage.setItem("token", response.data.token);
-//     }
+            localStorage.setItem("token", response.data.token);
+        } catch (error) {
+            console.error("Error signing message:", error);
+        }
+    }
 
-//     useEffect(() => {
-//         handleConnect();
-//     }, [walletClient]);
+    useEffect(() => {
+        signAndSend();
+    }, [address, isConnected]);
 
     return (
-        <div className="flex justify-between border-b pb-2 pt-2 bg-white">
+        <div className="flex justify-between border-b pb-2 pt-2">
             <div className="text-2xl pl-4 flex justify-center">
-                <img src="/verge.png" alt="Verge" className="h-16 w-auto" />
+                <img src="/verge.png" alt="Verge Logo" className="h-12 w-auto" />
             </div>
-
-        <div className="flex items-center gap-4">
-        <WagmiProvider config={config}>
-            <QueryClientProvider client={queryClient}>
-                <RainbowKitProvider theme={myTheme}>
-                    <div 
-                    className="text-l pt-2 pr-4">
-                        <ConnectButton/>
-                    </div>
-                </RainbowKitProvider>
-            </QueryClientProvider>
-    </WagmiProvider>
-    </div>
-    </div>
-  );
-}
+            <div className="text-xl pr-4 pb-2">
+                <ConnectButton />
+            </div>
+        </div>
+    );
+};

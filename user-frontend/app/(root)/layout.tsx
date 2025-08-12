@@ -1,38 +1,29 @@
 "use client";
-import React, { FC, useMemo } from 'react';
-import { ConnectionProvider, WalletProvider } from '@solana/wallet-adapter-react';
-import { WalletAdapterNetwork } from '@solana/wallet-adapter-base';
-import {
-    WalletModalProvider
-} from '@solana/wallet-adapter-react-ui';
-import { clusterApiUrl } from '@solana/web3.js';
+import "@rainbow-me/rainbowkit/styles.css";
+import { WagmiProvider, createConfig, http } from "wagmi";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { RainbowKitProvider, darkTheme, Theme } from "@rainbow-me/rainbowkit";
+import { mainnet, polygon, optimism, arbitrum, base, xrplevmTestnet } from "wagmi/chains";
 
-// Default styles that can be overridden by your app
-import '@solana/wallet-adapter-react-ui/styles.css';
+const config = createConfig({
+  chains: [mainnet, polygon, optimism, arbitrum, base, xrplevmTestnet],
+  transports: {
+    [mainnet.id]: http(),
+    [polygon.id]: http(),
+    [optimism.id]: http(),
+    [arbitrum.id]: http(),
+    [base.id]: http(),
+    [xrplevmTestnet.id]: http(),
+  },
+});
+const queryClient = new QueryClient();
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  const network = WalletAdapterNetwork.Mainnet;
-
-  // You can also provide a custom RPC endpoint.
-  const endpoint = "https://solana-mainnet.g.alchemy.com/v2/3GHuEu4-cXEuE8jDAZW3EFgTedkyJ0K3";
-
-  const wallets = useMemo(
-      () => [],
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-      [network]
-  );
-
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-      <ConnectionProvider endpoint={endpoint}>
-            <WalletProvider wallets={wallets} autoConnect>
-                <WalletModalProvider>
-                    { children }
-                </WalletModalProvider>
-            </WalletProvider>
-        </ConnectionProvider>
+    <WagmiProvider config={config}>
+      <QueryClientProvider client={queryClient}>
+        <RainbowKitProvider>{children}</RainbowKitProvider>
+      </QueryClientProvider>
+    </WagmiProvider>
   );
 }

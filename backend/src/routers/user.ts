@@ -9,8 +9,7 @@ import { createTaskInput } from "../types";
 import { ethers} from "ethers";
 import { verifyMessage} from "ethers";
 
-// const connection = new Connection('https://solana-mainnet.g.alchemy.com/v2/3GHuEu4-cXEuE8jDAZW3EFgTedkyJ0K3');
-const provider = new ethers.JsonRpcProvider("https://s.altnet.rippletest.net:51234/");
+const provider = new ethers.JsonRpcProvider("https://rpc.testnet.xrplevm.org");
 
 const PARENT_WALLET_ADDRESS = "0xB0e869fe03aa591ADFc6BA4C3F4407B9d85B46dE"; 
 
@@ -111,6 +110,9 @@ router.post("/task", authMiddleware, async (req, res) => {
         }
     })
 
+    console.log("[TASK] body:", req.body);
+    console.log("[TASK] user:", { userId, userAddress: user?.address });
+
     if (!parseData.success) {
         return res.status(411).json({
             message: "You've sent the wrong inputs",
@@ -129,6 +131,8 @@ router.post("/task", authMiddleware, async (req, res) => {
         }
 
         const receipt = await provider.getTransactionReceipt(parseData.data.signature);
+        console.log("[TASK] tx:", transaction?.hash, { from: transaction?.from, to: transaction?.to, value: transaction?.value?.toString() });
+        console.log("[TASK] receipt:", { has: !!receipt, status: receipt?.status });
 
         if (!receipt || receipt.status !== 1) {
             return res.status(411).json({
@@ -136,7 +140,7 @@ router.post("/task", authMiddleware, async (req, res) => {
             });
         }
 
-        const expectedAmount = ethers.parseEther("0.0001");
+        const expectedAmount = ethers.parseEther("0.1");
         if (transaction.value !== expectedAmount) {
             return res.status(411).json({
                 message: "Transaction amount is incorrect"
@@ -155,12 +159,16 @@ router.post("/task", authMiddleware, async (req, res) => {
             });
         }
 
+        console.log("[TASK] value check:", { tx: transaction?.value?.toString(), expected: ethers.parseEther("0.1").toString() });
+        console.log("[TASK] to check:", { tx: transaction?.to, expected: PARENT_WALLET_ADDRESS });
+        console.log("[TASK] from check:", { tx: transaction?.from, user: user?.address });
+
         // If all the above checks pass, then we can create the task
         let response = await prismaClient.$transaction(async tx => {
             const response = await tx.task.create({
                 data: {
                     title: parseData.data.title ?? DEFAULT_TITLE,
-                    amount: 0.0001,
+                    amount: 0.1 * TOTAL_DECIMALS,
                     signature: parseData.data.signature,
                     user_id: userId
                 }
@@ -212,51 +220,40 @@ router.get("/presignedUrl", authMiddleware, async (req, res) => {
 // sign in with wallet (most decentralized applications follow this where you 
 // connect with Phantom wallet)
 // signing a message
-router.post("/signin", async(req, res) => {
-    // sign verification logic here
-    const { publicKey, signature } = req.body;
-    const message = new TextEncoder().encode("Sign in to decentralized fiver website");
+router.post("/signin", async (req, res) => {
+    const { publicKey, signature } = req.body as { publicKey?: string; signature?: string };
+    const message = "Sign into Verge for voting";
 
-    const result = nacl.sign.detached.verify(
-        message,
-        new Uint8Array(signature.data),
-        new PublicKey(publicKey).toBytes(),
-      );
+    if (!publicKey || !signature) {
+        return res.status(411).json({ message: "Missing publicKey or signature" });
+    }
 
+    try {
+        console.log("[SIGNIN] incoming:", { publicKey, signatureLength: signature.length });
+        const recoveredAddress = verifyMessage(message, signature);
+        console.log("[SIGNIN] recovered vs provided:", { recoveredAddress, publicKey });
 
-    console.log(result);
-    
-    // If the user with this wallet address already exists, then it will just return userId
-    // Otherwise creates the userId for that user
-    const existingUser = await prismaClient.user.findFirst({
-        where: {
-            address: publicKey
+        if (recoveredAddress.toLowerCase() !== publicKey.toLowerCase()) {
+            return res.status(411).json({ message: "Invalid signature" });
         }
-    })
 
-    if (existingUser) {
-        const token = jwt.sign({
-            userId: existingUser.id
-        }, JWT_SECRET)
+        const existingUser = await prismaClient.user.findFirst({
+            where: { address: publicKey.toLowerCase() }
+        });
 
-        res.json({
-            token
-        })
-    } else {
+        if (existingUser) {
+            const token = jwt.sign({ userId: existingUser.id }, JWT_SECRET);
+            return res.json({ token });
+        }
 
         const user = await prismaClient.user.create({
-            data: {
-                address: publicKey,
-            }
-        })
-
-        const token = jwt.sign({
-            userId: user.id
-        }, JWT_SECRET)
-
-        res.json({
-            token
-        })
+            data: { address: publicKey.toLowerCase() }
+        });
+        const token = jwt.sign({ userId: user.id }, JWT_SECRET);
+        return res.json({ token });
+    } catch (e) {
+        console.error("[SIGNIN] verify error:", e);
+        return res.status(411).json({ message: "Invalid signature" });
     }
 });
 

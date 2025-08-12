@@ -1,19 +1,25 @@
 "use client";
-import { PublicKey, SystemProgram, Transaction } from '@solana/web3.js';
 import { UploadImage } from "@/components/UploadImage";
 import { BACKEND_URL } from "@/utils";
 import axios from "axios";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { useConnection, useWallet } from '@solana/wallet-adapter-react';
+import { useState, useEffect } from "react";
+import { useAccount, useSendTransaction, useWaitForTransactionReceipt } from "wagmi";
+import { ethers } from "ethers";
 
 export const Upload = () => {
     const [images, setImages] = useState<string[]>([]);
     const [title, setTitle] = useState("");
-    const [txSignature, setTxSignature] = useState("");
-    const { publicKey, sendTransaction } = useWallet();
+    const [txHash, setTxHash] = useState<`0x${string}` | undefined>(undefined);
+    const { address, isConnected } = useAccount();
+
+    const { sendTransactionAsync } = useSendTransaction();
     const router = useRouter();
-    const { connection } = useConnection();
+
+    // Wait for transaction confirmation
+    const { isSuccess: isConfirmed } = useWaitForTransactionReceipt({
+        hash: txHash,
+    });
 
     async function onSubmit() {
         const response = await axios.post(`${BACKEND_URL}/v1/user/task`, {
@@ -21,7 +27,7 @@ export const Upload = () => {
                 imageUrl: image,
             })),
             title,
-            signature: txSignature
+            signature: txHash
         }, {
             headers: {
                 "Authorization": localStorage.getItem("token")
@@ -32,62 +38,79 @@ export const Upload = () => {
     }
 
     async function makePayment() {
-        if (!publicKey) {
+        if (!address) {
             alert("Wallet is not connected. Please connect your wallet.");
             return;
         }
 
+        const recipientAddress = "0xB0e869fe03aa591ADFc6BA4C3F4407B9d85B46dE";
 
-        // Using Devnet recepient address and small test amount
-        const transaction = new Transaction().add(
-            SystemProgram.transfer({
-                fromPubkey: publicKey,
-                toPubkey: new PublicKey(process.env.PUBLIC_KEY!),
-                lamports: 10000
-            })
-        );
+        const hash = await sendTransactionAsync({
+            to: recipientAddress as `0x${string}`,
+            value: ethers.parseEther("0.1"), 
+        });
 
-        const {
-            context: { slot: minContextSlot },
-            value: { blockhash, lastValidBlockHeight }
-        } = await connection.getLatestBlockhashAndContext();
-
-        const signature = await sendTransaction(transaction, connection, { minContextSlot });
-
-        await connection.confirmTransaction({ blockhash, lastValidBlockHeight, signature });
-        setTxSignature(signature);
+        setTxHash(hash);
     }
 
-    return <div className="flex justify-center bg-white">
-        <div className="max-w-screen-lg w-full">
+    // Auto-submit when transaction is confirmed
+    useEffect(() => {
+        if (isConfirmed && txHash) {
+            onSubmit();
+        }
+    }, [isConfirmed, txHash]);
 
-            <label className="pt-10 block mt-2 text-md font-medium text-gray-900 text-black">Task details</label>
-
-            <input onChange={(e) => {
-                setTitle(e.target.value);
-            }} type="text" id="first_name" className="ml-4 mt-1 bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5" placeholder="What is your task?" required />
-
-            <label className="pb-10 block mt-8 text-md font-medium text-gray-900 text-black">Add Images</label>
-            <div className="flex justify-center pt-4 max-w-screen-lg">
-                {images.map(image => <UploadImage image={image} onImageAdded={(imageUrl) => {
-                    setImages(i => [...i, imageUrl]);
-                }} />)}
-            </div>
-
-        <div className="ml-4 pt-2 flex justify-center">
-            <UploadImage onImageAdded={(imageUrl) => {
-                setImages(i => [...i, imageUrl]);
-            }} />
-        </div>
-
+    return (
         <div className="flex justify-center">
-            <button onClick={async () => {
-                await makePayment();
-                await onSubmit()
-            }} type="button" className="submit-button ml-8 mt-6 text-white bg-gray-200 hover:bg-gray-900 focus:outline-none focus:ring-4 focus:ring-gray-300 font-medium rounded-full text-sm px-5 py-2.5 me-2 mb-2 dark:bg-gray-800 dark:however:bg-gray-700 dark:focus:ring-gray-700 dark:boder-gray-700">
-                Submit Task
-            </button>
+            <div className="max-w-screen-lg w-full">
+                <div className="text-2xl text-left pt-20 w-full pl-4">
+                    Create a task
+                </div>
+
+                <label className="pl-4 block mt-2 text-md font-medium text-gray-900 text-black">
+                    Task details
+                </label>
+
+                <input 
+                    onChange={(e) => setTitle(e.target.value)} 
+                    type="text" 
+                    className="ml-4 mt-1 bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5" 
+                    placeholder="What is your task?" 
+                    required 
+                />
+
+                <label className="pl-4 block mt-8 text-md font-medium text-gray-900 text-black">
+                    Add Images
+                </label>
+                
+                <div className="flex justify-center pt-4 max-w-screen-lg">
+                    {images.map((image, index) => (
+                        <UploadImage 
+                            key={index}
+                            image={image} 
+                            onImageAdded={(imageUrl) => {
+                                setImages(i => [...i, imageUrl]);
+                            }} 
+                        />
+                    ))}
+                </div>
+
+                <div className="ml-4 pt-2 flex justify-center">
+                    <UploadImage onImageAdded={(imageUrl) => {
+                        setImages(i => [...i, imageUrl]);
+                    }} />
+                </div>
+
+                <div className="flex justify-center">
+                    <button 
+                        onClick={txHash && isConfirmed ? onSubmit : makePayment} 
+                        type="button" 
+                        className="mt-4 text-white bg-gray-800 hover:bg-gray-900 focus:outline-none focus:ring-4 focus:ring-gray-300 font-medium rounded-full text-sm px-5 py-2.5 me-2 mb-2"
+                    >
+                        {txHash && isConfirmed ? "Submit Task" : "Pay 0.1 XRP"}
+                    </button>
+                </div>
+            </div>
         </div>
-    </div>
-    </div>
+    );
 };

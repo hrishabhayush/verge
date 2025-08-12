@@ -6,6 +6,7 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction) 
     const authHeader = req.headers["authorization"] ?? "";
 
     try {
+        console.log("[AUTH] Authorization header:", authHeader);
         const decoded = jwt.verify(authHeader, JWT_SECRET);
         console.log(decoded);
         // @ts-ignore
