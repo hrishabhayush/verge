@@ -110,9 +110,6 @@ router.post("/task", authMiddleware, async (req, res) => {
         }
     })
 
-    console.log("[TASK] body:", req.body);
-    console.log("[TASK] user:", { userId, userAddress: user?.address });
-
     if (!parseData.success) {
         return res.status(411).json({
             message: "You've sent the wrong inputs",
@@ -131,8 +128,6 @@ router.post("/task", authMiddleware, async (req, res) => {
         }
 
         const receipt = await provider.getTransactionReceipt(parseData.data.signature);
-        console.log("[TASK] tx:", transaction?.hash, { from: transaction?.from, to: transaction?.to, value: transaction?.value?.toString() });
-        console.log("[TASK] receipt:", { has: !!receipt, status: receipt?.status });
 
         if (!receipt || receipt.status !== 1) {
             return res.status(411).json({
@@ -158,10 +153,6 @@ router.post("/task", authMiddleware, async (req, res) => {
                 message: "Transaction is not from the correct wallet"
             });
         }
-
-        console.log("[TASK] value check:", { tx: transaction?.value?.toString(), expected: ethers.parseEther("0.1").toString() });
-        console.log("[TASK] to check:", { tx: transaction?.to, expected: PARENT_WALLET_ADDRESS });
-        console.log("[TASK] from check:", { tx: transaction?.from, user: user?.address });
 
         // If all the above checks pass, then we can create the task
         let response = await prismaClient.$transaction(async tx => {
@@ -222,16 +213,14 @@ router.get("/presignedUrl", authMiddleware, async (req, res) => {
 // signing a message
 router.post("/signin", async (req, res) => {
     const { publicKey, signature } = req.body as { publicKey?: string; signature?: string };
-    const message = "Sign into Verge for voting";
+    const message = "Sign into Verge for uploading tasks";
 
     if (!publicKey || !signature) {
         return res.status(411).json({ message: "Missing publicKey or signature" });
     }
 
     try {
-        console.log("[SIGNIN] incoming:", { publicKey, signatureLength: signature.length });
         const recoveredAddress = verifyMessage(message, signature);
-        console.log("[SIGNIN] recovered vs provided:", { recoveredAddress, publicKey });
 
         if (recoveredAddress.toLowerCase() !== publicKey.toLowerCase()) {
             return res.status(411).json({ message: "Invalid signature" });
@@ -252,7 +241,6 @@ router.post("/signin", async (req, res) => {
         const token = jwt.sign({ userId: user.id }, JWT_SECRET);
         return res.json({ token });
     } catch (e) {
-        console.error("[SIGNIN] verify error:", e);
         return res.status(411).json({ message: "Invalid signature" });
     }
 });

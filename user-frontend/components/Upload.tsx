@@ -101,7 +101,7 @@ export const Upload = () => {
                     }} />
                 </div>
 
-                <div className="flex justify-center">
+                <div className="pl-6 flex justify-center">
                     <button 
                         onClick={txHash && isConfirmed ? onSubmit : makePayment} 
                         type="button" 

@@ -67,7 +67,7 @@ model Payouts {
   user_id     Int
   user        User    @relation(fields: [user_id], references: [id])
   amount      Int
-  singature   String
+  signature   String
   status      TxnStatus
 }
 

@@ -24,7 +24,7 @@ export const NextTask = () => {
         setLoading(true);
         axios.get(`${BACKEND_URL}/v1/worker/nextTask`, {
             headers: {
-                "Authorization": localStorage.getItem("token")
+                "Authorization": localStorage.getItem("worker_token")
             }
         })
         .then(res => {
@@ -66,11 +66,12 @@ export const NextTask = () => {
                         selection: option.id.toString()
                     }, {
                         headers: {
-                            "Authorization": localStorage.getItem("token")
+                            "Authorization": localStorage.getItem("worker_token")
                         }
                     } )
     
                     // refresh the user balance whenever the payment is done 
+            
     
                     const nextTask = response.data.nextTask;
                     if (nextTask) {
