@@ -23,8 +23,7 @@ export const Appbar = () => {
       signature,
     });
 
-    setBalance(response.data.amount);
-    console.log(response.data.token)
+    setBalance(response.data.pendingAmount);
     localStorage.setItem("worker_token", response.data.token);
     signedForRef.current = address;
   }
@@ -38,10 +37,9 @@ export const Appbar = () => {
       `${BACKEND_URL}/v1/worker/payout`,
       {},
       { headers: { 
-        Authorization: localStorage.getItem("token")
+        Authorization: localStorage.getItem("worker_token")
       }
-    }
-    );
+    });
   }
 
   return (

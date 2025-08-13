@@ -10,12 +10,12 @@ import { ethers, verifyMessage } from "ethers";
 const prisma = new PrismaClient();
 const router = Router();
 
-const TOTAL_SUBMISSIONS = 5;
+const MAX_SUBMISSIONS = 5;
 
 // XRPL EVM testnet RPC (update if you use a different one)
 const provider = new ethers.JsonRpcProvider("https://rpc.testnet.xrplevm.org/");
 
-const PAYER_PRIVATE_KEY = process.env.PRIVATE_KEY!;
+const PAYER_PRIVATE_KEY = process.env.PAYER_PRIVATE_KEY!;
 const signer = PAYER_PRIVATE_KEY ? new ethers.Wallet(PAYER_PRIVATE_KEY, provider) : undefined;
 
 // Routes
@@ -42,7 +42,7 @@ router.post("/signin", async (req, res) => {
       const token = jwt.sign({ userId: existing.id }, WORKER_JWT_SECRET);
       return res.json({
         token,
-        amount: existing.pending_amount / TOTAL_DECIMALS,
+        amount: existing.pending_amount,
       });
     }
 
@@ -71,8 +71,8 @@ router.get("/balance", workerMiddleware, async (req, res) => {
   const worker = await prisma.worker.findFirst({ where: { id: Number(userId) } });
 
   return res.json({
-    pendingAmount: worker?.pending_amount ?? 0,
-    lockedAmount: worker?.locked_amount ?? 0,
+    pendingAmount: (worker?.pending_amount ?? 0) / TOTAL_DECIMALS,
+    lockedAmount: (worker?.locked_amount ?? 0) / TOTAL_DECIMALS,
   });
 });
 
@@ -91,31 +91,41 @@ router.post("/submission", workerMiddleware, async (req, res) => {
     return res.status(411).json({ message: "Incorrect task id" });
   }
 
-  const amountUnit = Math.floor(Number(task.amount) / TOTAL_SUBMISSIONS); // 1% per submission if TOTAL_SUBMISSIONS=100
+  const amountUnit = Math.floor(Number(task.amount) / MAX_SUBMISSIONS);
   const submission = await prisma.$transaction(async (tx) => {
     const s = await tx.submission.create({
       data: {
         option_id: Number(parsed.data.selection),
         worker_id: Number(userId),
         task_id: Number(parsed.data.taskId),
-        amount: amountUnit,
+        amount: 0,
       },
     });
 
-    await tx.worker.update({
-      where: { id: Number(userId) },
-      data: { pending_amount: { increment: amountUnit } },
-    });
     const totalSubmissions = await tx.submission.count({
       where: {
         task_id: Number(parsed.data.taskId),
       },
     });
-    if (totalSubmissions >= TOTAL_SUBMISSIONS) {
-        await tx.task.update({
-            where: { id : Number(parsed.data.taskId)},
-            data: { done: true},
-        });
+    if (totalSubmissions >= MAX_SUBMISSIONS) {
+      await tx.task.update({
+        where: { id: Number(parsed.data.taskId) },
+        data: { done: true },
+      });
+
+      const participants = await tx.submission.findMany({
+        where: { task_id: Number(parsed.data.taskId) },
+        select: { worker_id: true },
+      });
+
+      await Promise.all(
+        participants.map((p) =>
+          tx.worker.update({
+            where: { id: p.worker_id },
+            data: { pending_amount: { increment: amountUnit } },
+          })
+        )
+      );
     }
 
     return s;
@@ -148,54 +158,62 @@ router.post("/payout", workerMiddleware, async (req, res) => {
   const userId: number = req.userId;
 
   // Lock pending -> locked and create 'Processing' payout atomically to prevent double-spend
-  const { worker, payout } = await prisma.$transaction(async (tx) => {
-    const worker = await tx.worker.findUnique({ where: { id: Number(userId) } });
-    if (!worker) {
-      throw new Error("User not found");
-    }
-    if (worker.pending_amount <= 0) {
-      throw new Error("Nothing to payout");
-    }
+  let workerRec; let payoutRec;
+  try {
+    const init = await prisma.$transaction(async (tx) => {
+      const worker = await tx.worker.findUnique({ where: { id: Number(userId) } });
+      if (!worker) throw new Error("User not found");
+      if (worker.pending_amount <= 0) throw new Error("Nothing to payout");
 
-    const amountUnits = worker.pending_amount; // in app units
-    // Move pending to locked first
-    await tx.worker.update({
-      where: { id: Number(userId) },
-      data: {
-        pending_amount: { decrement: amountUnits },
-        locked_amount: { increment: amountUnits },
-      },
+      const amountUnits = worker.pending_amount; // in app units
+      // Move pending to locked first
+      await tx.worker.update({
+        where: { id: Number(userId) },
+        data: {
+          pending_amount: { decrement: amountUnits },
+          locked_amount: { increment: amountUnits },
+        },
+      });
+
+      const payout = await tx.payouts.create({
+        data: {
+          user_id: Number(userId),
+          amount: amountUnits,
+          signature: "",
+          status: "Processing",
+        },
+      });
+
+      return { worker, payout };
     });
-
-    const payout = await tx.payouts.create({
-      data: {
-        user_id: Number(userId),
-        amount: amountUnits,
-        signature: "",
-        status: "Processing",
-      },
-    });
-
-    return { worker, payout };
-  }).catch((e) => {
-    return { worker: null as any, payout: null as any, error: e as Error };
-  });
-
-  if (!worker || !payout) {
-    return res.status(411).json({
-      message: (payout as any)?.error?.message || (worker as any)?.error?.message || "Payout init failed",
-    });
+    workerRec = init.worker; payoutRec = init.payout;
+  } catch (e: any) {
+    return res.status(411).json({ message: e?.message || "Payout init failed" });
   }
 
+  const worker = workerRec;
+  const payout = payoutRec;
+
   try {
-    // Convert app units -> XRP (18 decimals on EVM side)
-    const amountEther = (worker.pending_amount / TOTAL_DECIMALS).toString();
+    // Convert app units (scaled by TOTAL_DECIMALS) to wei using integer math
+    const WEI_PER_ETHER = BigInt(10) ** BigInt(18);
+    const wei = (BigInt(worker.pending_amount) * WEI_PER_ETHER) / BigInt(TOTAL_DECIMALS);
+    if (wei <= BigInt(0)) {
+      return res.status(411).json({ message: "Nothing to payout" });
+    }
+
+    const signerAddr = await signer.getAddress();
+    const bal = await provider.getBalance(signerAddr);
+    if (bal <= wei) {
+      return res.status(411).json({ message: "Insufficient balance" });
+    }
+
     const tx = await signer.sendTransaction({
       to: worker.address as `0x${string}`,
-      value: ethers.parseEther(amountEther),
+      value: wei,
     });
 
-    // Update payout with tx hash, keep status as 'Processing' or set 'Sent'
+    // Update payout with tx hash, keep status as 'Sent'
     await prisma.payouts.update({
       where: { id: payout.id },
       data: { signature: tx.hash, status: "Success" },

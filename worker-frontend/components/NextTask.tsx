@@ -71,7 +71,7 @@ export const NextTask = () => {
                     } )
     
                     // refresh the user balance whenever the payment is done 
-            
+                    window.dispatchEvent(new CustomEvent("worker-balance-refresh"));
     
                     const nextTask = response.data.nextTask;
                     if (nextTask) {
