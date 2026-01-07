@@ -1,5 +1,7 @@
 # Verge
 
+The site is live at [thevergesocial.com](https://thevergesocial.com)
+
 [![Watch the demo](https://img.youtube.com/vi/71Zm1NXWtv0/hqdefault.jpg)](https://youtu.be/71Zm1NXWtv0)
 
 ## Problem
